@@ -403,25 +403,40 @@ nichts davon öffnen.
 
 ## 8. Was noch zu tun bzw. zu prüfen ist
 
-1. **Echter Fototest mit einem selbst fotografierten Objekt.** Alles bisher lief auf dem
-   `truck`-Testdatensatz. Der eigentliche Use Case der Aufgabe — eine Nutzerin fotografiert
-   5–30 Mal ein beliebiges reales Objekt — wurde noch nie end-to-end mit echten, frisch
-   aufgenommenen Fotos getestet, nur mit Teilmengen aus einem bestehenden dichten
-   Datensatz. Erwartung laut Abschnitt 4b: echte, bewusst gut verteilte Fotos sollten
-   besser abschneiden als die zufälligen Teilmengen hier — aber unbestätigt.
-2. **Echte CAD-Evaluierung nachholen oder die Selbstvergleichs-Lösung im Bericht
-   sauber begründen.** Abschnitt 5 beschreibt einen Ersatz-Ansatz (Selbstvergleich statt
-   externem CAD). Falls volle Punktzahl bei diesem Aufgabenteil wichtig ist: entweder ein
-   reales Objekt mit auffindbarem CAD-Modell besorgen und fotografieren (siehe Punkt 1),
-   oder den DTU-MVS-Benchmark sauber aufsetzen (aufwändiger, siehe Abschnitt 5).
-3. **20-Foto-Sparse-Test mit Chamfer-Distanz nachholen.** Für n=30 liegt ein Chamfer-Wert
-   vor (Abschnitt 5); für n=20 nicht, weil der letzte COLMAP-Lauf nur 4/20 Bilder
-   registriert hat (Abschnitt 4b) — zu wenig für eine sinnvolle Rekonstruktion. Lauf
-   wiederholen (COLMAP ist bei n=20 nicht-deterministisch, ein neuer Versuch kann
-   besser ausfallen) und denselben Chamfer-Vergleich durchführen.
-4. **Watertight-Reparatur des Mesh.** Alle bisherigen STL-Exporte sind nicht wasserdicht
-   (Unterseite des Objekts nie fotografiert). Für einen 3D-Druck wäre ein manueller
-   2-Minuten-Schritt in Blender/MeshLab/Meshmixer nötig — bewusst nicht in Colab gemacht.
+1. **Echter Fototest mit einem selbst fotografierten Objekt.** ⚠️ **Vorbereitet, wartet auf
+   Colab-Ausführung (2026-09-30).** Eigene Fotos waren nicht möglich (kein Objekt/keine Kamera
+   zur Hand). Stattdessen: **Amazon Berkeley Objects (ABO)**, CC BY 4.0, (c) Amazon.com —
+   ein öffentlicher Datensatz mit **echten** (nicht gerenderten) Turntable-Fotos realer
+   physischer Produkte. Gewähltes Objekt: Sessel "Ravenna Home Radford Modern Curved"
+   (item_id `B07F2X8K62`, spin_id `f8022078`, 72 Fotos, Schritt 5°). Neuer Abschnitt
+   **„9. Realer Fototest: Amazon Berkeley Objects (ABO)"** in `pipeline_clean.ipynb`
+   (Zellen automatisiert: Download → N=72/30/20-Teilmengen → COLMAP von Grund auf →
+   SAM2-Maskierung (Prompt `"a chair."`) → masked splatfacto → Poisson → STL). Claude kann
+   Colab-Zellen nicht selbst ausführen — muss von der Nutzerin gestartet werden.
+2. **Echte CAD-Evaluierung.** ⚠️ **Vorbereitet, wartet auf Colab-Ausführung.** Dasselbe
+   ABO-Objekt hat zusätzlich ein **echtes CAD-Modell** (glTF/glb, künstlerisch modelliert,
+   `3dmodels/original/2/B07F2X8K62.glb`) — damit entfällt der Selbstvergleichs-Umweg aus
+   Abschnitt 5 für dieses Objekt. Abschnitt „9b" im Notebook lädt das CAD direkt und
+   berechnet dieselbe Chamfer-Methodik (Normierung, Rotationssuche, ICP) gegen die
+   **externe** Referenz für dense/N=30/N=20. Lizenz: CC BY 4.0 — bei Abgabe/Veröffentlichung
+   Attribution an Amazon.com angeben (siehe Markdown-Zelle im Notebook).
+3. **20-Foto-Sparse-Test mit Chamfer-Distanz (truck) nachholen.** ⚠️ **Vorbereitet, wartet auf
+   Colab-Ausführung.** Neuer Abschnitt **„10. Powtor: n=20 sparse-view truck"** im Notebook:
+   automatische Retry-Schleife (bis zu 5 COLMAP-Versuche hintereinander auf denselben 20
+   Fotos, COLMAP selbst ist nicht-deterministisch), behält den besten Versuch, trainiert
+   und meshed ihn, und berechnet dieselbe Chamfer-Distanz wie für n=30 gegen
+   `truck_object_ref.stl`.
+4. **Watertight-Reparatur des Mesh.** ✅ **Erledigt (2026-09-30), lokal ohne Colab.**
+   `truck_object_30k.stl` (Poisson+DBSCAN, nicht wasserdicht, 176 537 Ecken) lokal mit
+   `pymeshfix` (`joincomp=True, remove_smallest_components=False`) repariert →
+   `truck_object_30k_watertight.stl`: 280 022 Ecken / 560 156 Dreiecke,
+   **watertight=True**, 1 zusammenhängende Komponente, konsistente Normalen-Orientierung,
+   plausibles Volumen (0,047 m³ bei Bbox 1,05×0,40×0,32 m). Euler-Zahl -56 (statt der
+   für ein einfaches geschlossenes Objekt erwarteten 2) — deutet auf viele kleine, beim
+   Schließen der komplexen Bodenöffnung entstandene Mikro-„Henkel" hin statt auf grobe
+   Fehler; visuell (siehe `docs/images/mesh_watertight_iso.png`) weiterhin klar
+   LKW-förmig und solide, keine sichtbaren Löcher mehr. Für einen tatsächlichen 3D-Druck
+   ggf. zusätzlich in Blender/Meshmixer prüfen, ob die Mikro-Henkel optisch stören.
 5. **Colab-Stabilität im Blick behalten.** Die Laufzeitumgebung setzt sich sehr häufig
    zurück (Abschnitt 2). Vor jeder längeren Arbeitssitzung zuerst prüfen, ob venv/Datensatz/
    Masken noch da sind, und im Zweifel zuerst den Cache aus `nerf_cache/` wiederherstellen
