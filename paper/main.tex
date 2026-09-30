@@ -1,0 +1,106 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Sparse-View Feasibility of Language-Guided\\3D Gaussian Splatting for Object Reconstruction}
+
+\author{\IEEEauthorblockN{Viktoriia Ovdiienko}
+\IEEEauthorblockA{FH Technikum Wien}
+}
+
+\maketitle
+
+\begin{abstract}
+Reconstructing a single physical object as a printable 3D mesh from a handful of ordinary photographs is a practical goal for casual users, but standard 3D Gaussian Splatting pipelines are developed and validated on dense captures with far more input views than a typical user is willing to take. This paper presents a pipeline that combines camera pose estimation, 3D Gaussian Splatting, and language guided segmentation through Grounding DINO and SAM2 to reconstruct only the object named by a short text prompt, discarding the background before it is ever trained, and exports the result as a printable STL mesh. The scientific contribution is a controlled empirical study of how reconstruction quality degrades as the number of input photographs is reduced from a dense reference capture down to the five to thirty photo range realistic for a single user, isolating this effect from camera pose estimation itself. Results are verified through repeated reconstructions, qualitative shape comparison, and a normalized Chamfer distance measurement against a dense reference reconstruction.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+Photogrammetry has made 3D scanning of physical objects accessible outside of professional studios, and 3D Gaussian Splatting (3DGS) has recently displaced Neural Radiance Fields (NeRF) as the dominant technique for fast, high fidelity novel view synthesis from a set of posed photographs. Unlike NeRF, 3DGS represents a scene explicitly as a set of anisotropic Gaussians, which can be filtered, clustered, and converted into a triangle mesh, making it a natural candidate for turning photographs of an object into an exportable 3D model such as an STL file for downstream use, for example 3D printing.
+
+Two practical obstacles stand between this capability and a tool a non-expert user could operate. First, 3DGS reconstructs everything visible in the photographs, including the background, table, or hand holding the object, so the object of interest must be isolated before or during training rather than manually cleaned up afterward. Second, and less discussed in the literature, 3DGS is developed and evaluated almost exclusively on dense captures of tens to hundreds of views; a user photographing a single object with a phone will realistically take on the order of five to thirty photographs, and it is not well established how reconstruction quality behaves in that sparse regime once background removal is also required.
+
+This paper addresses both obstacles with a single pipeline: camera poses are estimated with COLMAP, background is removed per photograph with a text prompted Grounding DINO plus SAM2 mask before 3DGS training so that background Gaussians are never learned, and the resulting Gaussians are exported through Poisson surface reconstruction into a cleaned, printable STL mesh. Every component beyond the masking and export logic is deliberately kept as a well established default configuration, since the scientific contribution of this work is not a novel reconstruction method but a controlled empirical measurement: how does the quality of this fixed pipeline degrade as the number of input photographs is reduced from a dense reference capture toward the five to thirty photo range a real user would tolerate, and is masking a precondition for that sparse regime to remain usable at all? Answering this research question requires isolating the effect of view count from the separate and equally real risk that COLMAP itself fails to register a small, wide baseline set of photographs, which this paper treats as a distinct, secondary risk rather than conflating it with reconstruction quality.
+
+The remainder of this paper is structured as follows. Section II reviews prior work on 3D Gaussian Splatting, language guided segmentation, and sparse view reconstruction. Section III describes the reconstruction pipeline and the experimental protocol used to vary and evaluate view count. Section IV reports the resulting reconstructions across view counts, including a Chamfer distance based quantitative comparison. Section V summarizes the findings and outlines the remaining work needed to validate the pipeline on real, non-subsampled user photographs.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{State of the Art}
+
+\begin{itemize}
+\item Terminology: Structure-from-Motion / COLMAP camera pose estimation \cite{schoenberger2016sfm}; Neural Radiance Fields \cite{mildenhall2020nerf} as the predecessor representation to 3D Gaussian Splatting \cite{kerbl20233dgs}.
+\item 3D Gaussian Splatting \cite{kerbl20233dgs}: explicit, differentiable scene representation trained by photometric loss; real time rendering; enables direct point cloud and mesh extraction, unlike NeRF's implicit volumetric representation.
+\item nerfstudio \cite{tancik2023nerfstudio} as the open source reference implementation of 3D Gaussian Splatting (the \emph{splatfacto} method) used throughout this work.
+\item Mesh extraction from Gaussians: Poisson surface reconstruction \cite{kazhdan2006poisson} applied to the oriented Gaussian centers, followed by outlier removal and connected component filtering.
+\item Open vocabulary, language guided segmentation: Grounding DINO \cite{liu2023groundingdino} for text-to-bounding-box detection; Segment Anything \cite{kirillov2023sam} and its successor SAM2 \cite{ravi2024sam2} for promptable mask generation from a bounding box.
+\item Background removal in radiance field training is commonly implemented by applying a binary mask to the photometric loss so that masked pixels never contribute a training signal, which prevents background content from ever being represented by the model.
+\item Sparse view reconstruction is a known failure mode for both NeRF and 3DGS; view-count requirements and degradation behavior are comparatively well characterized for NeRF but far less so for 3DGS, and essentially unstudied jointly with language guided background masking.
+\item Benchmark capture used for controlled testing in this work: the Tanks and Temples dense multi-view dataset \cite{knapitsch2017tanks}, subsampled to emulate a sparse user capture while keeping camera poses accurate.
+\item So What: existing work validates 3DGS quality primarily on dense captures and demonstrates language guided segmentation only as an independent add-on; the combination under a sparse-view, single-object, export-to-mesh setting is not covered, which motivates the controlled sparse-view study in Section IV.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Materials and Methods}
+
+\subsection{Reconstruction Pipeline}
+\begin{itemize}
+\item Input: $N$ photographs of a single physical object plus a short text description of the object (for example ``the toy truck'').
+\item Step 1, camera pose estimation: COLMAP structure-from-motion \cite{schoenberger2016sfm}, either exhaustive matching on the raw photographs or reuse of a previously computed accurate pose set, depending on the experiment (see below).
+\item Step 2, language guided segmentation: Grounding DINO \cite{liu2023groundingdino} detects a bounding box for the text prompt in each photograph; SAM2 \cite{ravi2024sam2} converts the box into a binary object mask.
+\item Step 3, masked 3DGS training: \emph{splatfacto} \cite{tancik2023nerfstudio}, the nerfstudio implementation of 3D Gaussian Splatting \cite{kerbl20233dgs}, is trained with the per-frame masks applied to the photometric loss so background Gaussians are never optimized.
+\item Step 4, mesh extraction: the trained Gaussian point cloud is exported, statistical outliers are removed, DBSCAN clustering retains only the largest connected object cluster, and Poisson surface reconstruction \cite{kazhdan2006poisson} at fixed octree depth produces a triangle mesh.
+\item Step 5, export: the cleaned mesh is written to an STL file.
+\end{itemize}
+
+\subsection{Experimental Protocol for the View-Count Study}
+\begin{itemize}
+\item Reference dataset: the Tanks and Temples ``truck'' capture \cite{knapitsch2017tanks}, 251 photographs with accurate COLMAP poses.
+\item Controlled subsampling: view counts $N \in \{12, 24, 251\}$ drawn from the accurate 251-view pose set, which isolates reconstruction and masking quality from COLMAP's own sparse-view pose-estimation risk.
+\item Separate, uncontrolled test: COLMAP run from scratch, with exhaustive matching and no pre-supplied poses, on raw random subsamples at $N=20$ and $N=30$, to measure real-world pose registration success rate independently of reconstruction quality.
+\item Ablation: each view count is trained both with and without SAM2 masking, to isolate the contribution of background removal from the effect of view count alone.
+\item Evaluation: qualitative shape and bounding-box comparison against the dense 251-view reference, plus a bidirectional Chamfer distance (surface-point sampling, scale normalization, rotation search, ICP alignment) between a sparse ($N=30$, real-COLMAP) masked reconstruction and the dense reference, used as a self-consistency proxy in the absence of an external CAD ground truth.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experimental Results}
+
+\begin{itemize}
+\item Dense reference ($N=251$, masked): clean, object-only reconstruction, used as the pseudo ground truth for all comparisons below.
+\item $N=12$, no masking: background fused with the object, wrong overall proportions, reconstruction unusable.
+\item $N=12$, masked: rough but recognizably object-shaped; the largest deviation from the reference among all masked runs.
+\item $N=24$, masked: visibly closer to the reference than $N=12$, though still rougher than the dense reconstruction.
+\item Masking is a precondition, not a refinement, for sparse-view usability: without masks, background content consumes the already scarce view budget and produces severe floaters and wrong proportions even at $N=12$.
+\item Real-world COLMAP pose registration without pre-supplied poses: 15 of 20 frames (75 percent) and 22 of 30 frames (73 percent) successfully registered; the registration rate did not improve from $N=20$ to $N=30$, indicating that the limiting factor is the baseline and appearance change between consecutive frames of a subsampled dense capture rather than raw photo count.
+\item Quantitative proxy evaluation: a bidirectional Chamfer distance of 0.25, normalized to object size, between the $N=30$ real-COLMAP masked reconstruction and the dense reference, against an ICP inlier RMSE of 0.026 after alignment, indicating that the core shape aligns well while a nontrivial fraction of the sparse geometry, such as noise and missing regions, remains far from the reference.
+\item Practical implication: within the brief's five to thirty photo target range, 20 to 30 photographs are recommended over the lower end of that range for an acceptable reconstruction under this pipeline.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Summary and Outlook}
+
+\begin{itemize}
+\item Summary: a language guided 3DGS pipeline, combining COLMAP pose estimation, Grounding DINO and SAM2 masking, masked \emph{splatfacto} training, and Poisson mesh export, reconstructs a single named object as a clean STL mesh; the sparse-view study shows that masking is necessary for usable results and that reconstruction quality degrades gracefully with view count once masking is present, with 20 to 30 views recommended over the lower end of the brief's target range.
+\item Outlook 1: repeat the view-count study on genuinely independent, user-captured photographs of a new object, rather than subsamples of a single dense benchmark capture, to separate capture-protocol effects from the measured view-count trend.
+\item Outlook 2: replace the self-consistency Chamfer-distance proxy with a comparison against an external CAD reference model where one becomes available, as originally specified in the task brief.
+\item Outlook 3: quantify SAM2 mask quality directly, for example against manually annotated masks, rather than only indirectly through downstream reconstruction quality.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{\small
+\bibliographystyle{IEEEtranS}
+\bibliography{refs}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\section*{Appendix}
+Reserved for additional visualizations (reconstructed meshes across view counts, mask examples) to be added in a later progress report.
+
+\end{document}

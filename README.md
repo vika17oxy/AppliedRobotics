@@ -70,6 +70,7 @@ Volle Methodik: [PROJECT_STATUS.md §5](PROJECT_STATUS.md#5-evaluierung-chamfer-
 | [`truck_object_30k.stl`](truck_object_30k.stl) | Exportiertes Beispiel-Mesh (Testobjekt "truck", 30k Trainingsiterationen) |
 | [`truck_positions.json`](truck_positions.json) | Kameraposen-Daten des Testdatensatzes |
 | [`docs/images/`](docs/images/) | Renderings des Ergebnis-Mesh für dieses README |
+| [`paper/`](paper/) | Wissenschaftliche Ausarbeitung (IEEE-Template, 3 Seiten) — Fortschrittsbericht 1: Gliederung + ausformulierter Beitrag |
 
 ## Ausführen
 
