@@ -403,23 +403,41 @@ nichts davon öffnen.
 
 ## 8. Was noch zu tun bzw. zu prüfen ist
 
-1. **Echter Fototest mit einem selbst fotografierten Objekt.** ⚠️ **Vorbereitet, wartet auf
-   Colab-Ausführung (2026-09-30).** Eigene Fotos waren nicht möglich (kein Objekt/keine Kamera
-   zur Hand). Stattdessen: **Amazon Berkeley Objects (ABO)**, CC BY 4.0, (c) Amazon.com —
-   ein öffentlicher Datensatz mit **echten** (nicht gerenderten) Turntable-Fotos realer
-   physischer Produkte. Gewähltes Objekt: Sessel "Ravenna Home Radford Modern Curved"
-   (item_id `B07F2X8K62`, spin_id `f8022078`, 72 Fotos, Schritt 5°). Neuer Abschnitt
-   **„9. Realer Fototest: Amazon Berkeley Objects (ABO)"** in `pipeline_clean.ipynb`
-   (Zellen automatisiert: Download → N=72/30/20-Teilmengen → COLMAP von Grund auf →
-   SAM2-Maskierung (Prompt `"a chair."`) → masked splatfacto → Poisson → STL). Claude kann
-   Colab-Zellen nicht selbst ausführen — muss von der Nutzerin gestartet werden.
-2. **Echte CAD-Evaluierung.** ⚠️ **Vorbereitet, wartet auf Colab-Ausführung.** Dasselbe
-   ABO-Objekt hat zusätzlich ein **echtes CAD-Modell** (glTF/glb, künstlerisch modelliert,
-   `3dmodels/original/2/B07F2X8K62.glb`) — damit entfällt der Selbstvergleichs-Umweg aus
-   Abschnitt 5 für dieses Objekt. Abschnitt „9b" im Notebook lädt das CAD direkt und
-   berechnet dieselbe Chamfer-Methodik (Normierung, Rotationssuche, ICP) gegen die
-   **externe** Referenz für dense/N=30/N=20. Lizenz: CC BY 4.0 — bei Abgabe/Veröffentlichung
-   Attribution an Amazon.com angeben (siehe Markdown-Zelle im Notebook).
+1. **Echter Fototest mit einem selbst fotografierten Objekt.** ⚠️ **Technisch durchgelaufen,
+   Ergebnis aber unbrauchbar (Stand 2026-10-02).** Eigene Fotos waren nicht möglich (kein
+   Objekt/keine Kamera zur Hand). Stattdessen: **Amazon Berkeley Objects (ABO)**, CC BY 4.0,
+   (c) Amazon.com — echte (nicht gerenderte) Turntable-Fotos eines Sessels ("Ravenna Home
+   Radford Modern Curved", item_id `B07F2X8K62`, 72 Fotos, Schritt 5°). Abschnitt 9 im
+   Notebook. **COLMAP scheitert auf diesen Fotos komplett** (nur 2/72 bzw. 2/30 Bilder
+   gematcht, sowohl mit exhaustive als auch sequential matching) — der reinweiße
+   Studio-Hintergrund gibt SIFT keine Ankerpunkte, und die Kamera steht fest (nur das Objekt
+   dreht sich), was klassisches SfM strukturell erschwert. Workaround: Kamera-Posen direkt
+   aus dem bekannten Drehwinkel (`azimuth` im Dateinamen) berechnet (klassische
+   `pose_spherical`-Kreisbahn, Radius/Höhe/FOV **geraten**, keine echten Kameradaten
+   verfügbar) und nerfstudio als fertiges `transforms.json` übergeben (dokumentierter Weg
+   ohne COLMAP). Training lief fehlerfrei durch (dense/N=30/N=20, jeweils jobs completed),
+   STL-Export ebenso — **aber die resultierende Geometrie ist bei visueller Kontrolle kein
+   Sessel, sondern eine flache, verrauschte Scheibe** (Bounding-Box z. B. 8,0×8,3×2,8 bei
+   dense — rund 3× breiter als hoch, obwohl der echte Sessel laut CAD-Extent eher würfelig
+   ist: 0,72×1,10×0,86 m). Die geratenen Kameraparameter waren offensichtlich zu ungenau für
+   eine korrekte Rekonstruktion. Geplanter nächster Schritt: `ns-train` mit
+   `--pipeline.model.camera-optimizer.mode SO3xR3` — nerfstudios eingebaute
+   Posen-Verfeinerung während des Trainings (Gradientenabstieg korrigiert die groben
+   Start-Schätzwerte selbst), statt Radius/Höhe/FOV von Hand weiter zu raten. Noch nicht
+   getestet (Colab-GPU-Kontingent am 2026-10-02 erschöpft).
+2. **Echte CAD-Evaluierung.** ⚠️ **Zahlen liegen vor, aber mit Vorbehalt.** Dasselbe
+   ABO-Objekt hat ein echtes CAD-Modell (glTF/glb, `3dmodels/original/2/B07F2X8K62.glb`).
+   Abschnitt 9b berechnet Chamfer-Distanz (Normierung, Rotationssuche, ICP) gegen diese
+   **externe** Referenz: dense 0,2236 (ICP-RMSE 0,0273), N=30 0,2355 (0,0279), N=20 0,2132
+   (0,0283) — Werte in ähnlicher Größenordnung wie der Selbstvergleichs-Proxy aus Abschnitt 5,
+   **aber** da die zugrundeliegende Geometrie (Punkt 1) nachweislich kein Sessel ist, sind
+   diese Zahlen mit Vorsicht zu interpretieren: die Chamfer-Distanz nach Skalennormierung
+   kann für eine flache, verrauschte Form zufällig in einem "plausibel aussehenden" Bereich
+   landen, ohne dass die Rekonstruktion tatsächlich stimmt. Vor einer Verwendung im Bericht
+   sollte der camera-optimizer-Versuch (Punkt 1) abgeschlossen und mit neuen,
+   geometrisch plausiblen STLs neu gerechnet werden. Lizenz: CC BY 4.0 — bei
+   Abgabe/Veröffentlichung Attribution an Amazon.com angeben (siehe Markdown-Zelle im
+   Notebook).
 3. **20-Foto-Sparse-Test mit Chamfer-Distanz (truck) nachholen.** ⚠️ **Vorbereitet, wartet auf
    Colab-Ausführung.** Neuer Abschnitt **„10. Powtor: n=20 sparse-view truck"** im Notebook:
    automatische Retry-Schleife (bis zu 5 COLMAP-Versuche hintereinander auf denselben 20
