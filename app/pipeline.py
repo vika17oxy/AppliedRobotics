@@ -5,6 +5,7 @@ separate venv /content/nsenv through subprocesses; Grounding DINO + SAM2 run in 
 kernel via transformers.
 """
 import glob
+import hashlib
 import json
 import os
 import shutil
@@ -36,10 +37,18 @@ def run(cmd, log):
 
 
 def prepare_photos(paths, raw_dir, max_side=1600):
-    """EXIF-rotate, downscale (COLMAP runs on CPU), drop broken thumbnails."""
+    """EXIF-rotate, downscale (COLMAP runs on CPU), drop broken thumbnails and duplicate files.
+
+    Landscape shots are turned to portrait: COLMAP is run with one shared camera model, which breaks
+    when some images are 1600x1200 and others 1200x1600. A 90° turn is just a rolled camera.
+    """
     os.makedirs(raw_dir, exist_ok=True)
-    n = 0
+    seen, n = set(), 0
     for i, p in enumerate(sorted(paths)):
+        digest = hashlib.md5(open(p, "rb").read()).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
         try:
             im = Image.open(p)
         except Exception:
@@ -47,6 +56,8 @@ def prepare_photos(paths, raw_dir, max_side=1600):
         if max(im.size) < 1000:
             continue
         im = ImageOps.exif_transpose(im).convert("RGB")
+        if im.width > im.height:
+            im = im.transpose(Image.Transpose.ROTATE_90)
         im.thumbnail((max_side, max_side), Image.LANCZOS)
         im.save(f"{raw_dir}/img_{i:03d}.jpg", quality=95)
         n += 1
