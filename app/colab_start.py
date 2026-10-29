@@ -28,6 +28,14 @@ def sh(cmd, quiet=True):
 if subprocess.run("nvidia-smi -L", shell=True, capture_output=True).returncode:
     raise SystemExit("❌ No GPU. Runtime → Change runtime type → T4 GPU, then run again.")
 
+# Google Drive: finished STLs are copied to MyDrive/Applied_Robotics/results (Colab sessions get wiped)
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    os.makedirs("/content/drive/MyDrive/Applied_Robotics/results", exist_ok=True)
+except Exception as e:
+    print("⚠️ Google Drive not mounted, results stay only in this session:", e)
+
 # 2) nerfstudio in its own Python 3.10 venv (Colab's kernel is too new for nerfstudio 1.1.5).
 #    Exact versions matter: gsplat must come as a prebuilt wheel, numpy must be 1.x and installed last.
 if not os.path.exists(f"{NS}/bin/ns-train"):

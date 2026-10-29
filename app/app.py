@@ -4,6 +4,7 @@ Start on Colab (GPU) from notebooks/web_app.ipynb; Gradio prints a public *.grad
 Look and Taurus easter eggs live in style.py.
 """
 import os
+import shutil
 import sys
 import time
 import traceback
@@ -14,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import style as S  # noqa: E402
 
 JOBS = "/content/jobs"
+DRIVE_RESULTS = "/content/drive/MyDrive/Applied_Robotics/results"  # used only if Drive is mounted
 BULL_WORDS = ("bull", "taurus", "stier", "ox", "телец", "бык")
 
 
@@ -82,6 +84,12 @@ def reconstruct(files, prompt, iters):
 
         mins = (time.time() - t0) / 60
         note = f"{reg}/{n} Fotos verwendet · wasserdicht, bereit für den Slicer."
+        if os.path.isdir(DRIVE_RESULTS):  # Colab sessions die; keep every result on Google Drive
+            safe = "".join(c if c.isalnum() else "_" for c in prompt[:-1]).strip("_")[:40] or "object"
+            kept = f"{DRIVE_RESULTS}/{safe}_{os.path.basename(job)}.stl"
+            shutil.copy(stl, kept)
+            log(f"saved to Drive: {kept}")
+            note += " Kopie auf Google Drive: Applied_Robotics/results/."
         if bull:
             note += " ♉ Ein Stier, rekonstruiert unter dem Zeichen des Stiers."
         yield state(S.status_html(5, f"Fertig in {mins:.0f} min", "ok", note), preview, stl, stl)
