@@ -120,4 +120,5 @@ if __name__ == "__main__":
     demo.queue(default_concurrency_limit=1).launch(
         share="--local" not in sys.argv, debug=True,
         theme=S.theme(), css=S.CSS, head=S.HEAD, js=S.JS,
+        allowed_paths=[JOBS],  # Gradio 6 only serves files from explicitly allowed folders
     )
