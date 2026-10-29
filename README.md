@@ -18,7 +18,7 @@ Abgleich mit den Punkten der Aufgabenstellung — was umgesetzt ist und wo genau
 | 2 | Sprachgesteuerte Segmentierung (Text → nur das genannte Objekt) | ✅ fertig | Grounding DINO + **SAM2**, 251/251 Masken erzeugt, [`pipeline_clean.ipynb`](pipeline_clean.ipynb) Abschnitt 4 |
 | 3 | Masken vor/während dem Training angewendet (Hintergrund wird nie trainiert) | ✅ fertig | `ns-train ... --masks-path masks`, [`pipeline_clean.ipynb`](pipeline_clean.ipynb) Abschnitt 5 |
 | 4 | Export als STL | ✅ fertig | Gaussians → Poisson-Mesh → STL, [`pipeline_clean.ipynb`](pipeline_clean.ipynb) Abschnitt 8 · Ergebnis: [`truck_object_30k.stl`](results/truck/truck_object_30k.stl) |
-| 5 | (optional, ~10 %) Evaluierung vs. CAD-Referenz (Chamfer-Distanz) | ⚠️ Proxy fertig, echte CAD-Variante offen | Self-Consistency-Proxy: siehe [unten](#evaluierung). ABO-CAD-Vergleich ausgeführt, aber nicht aussagekräftig (Rekonstruktion geometrisch falsch, [PROJECT_STATUS.md §8](PROJECT_STATUS.md#8-was-noch-zu-tun-bzw-zu-prüfen-ist), Punkt 2). Nächster Schritt: Vergleich gegen die Druck-STL der [Figur](#eigene-fotos-3d-gedruckte-figur) |
+| 5 | (optional, ~10 %) Evaluierung vs. CAD-Referenz (Chamfer-Distanz) | ✅ fertig | Gedruckter Drachen-Halter, 21 eigene Fotos, Vergleich mit Original-STL: **Chamfer 1,71 mm**, F-Score@5 mm 0,95 — siehe [Evaluierung](#evaluierung), Skript [`eval/chamfer_eval.py`](eval/chamfer_eval.py) |
 | — | Zielszenario: eigene Fotos eines echten Objekts | ✅ fertig (STL) | 3D-gedruckte Figur, 43 eigene Smartphone-Fotos: COLMAP 43/43, Masken 43/43, STL nach Masken-Carving — [`notebooks/photos_to_stl.ipynb`](notebooks/photos_to_stl.ipynb), siehe [unten](#eigene-fotos-3d-gedruckte-figur) |
 | — | Wenige Fotos (5–30) | ✅ getestet (truck-Teilmengen) | Sparse-View-Test bei n=12/20/24/30, siehe [PROJECT_STATUS.md §4](PROJECT_STATUS.md#4-sparse-view-test-funktioniert-die-pipeline-mit-530-fotos) |
 | — | STL druckbar (watertight) | ✅ fertig | `truck_object_30k.stl` lokal mit `pymeshfix` repariert → [`truck_object_30k_watertight.stl`](results/truck/truck_object_30k_watertight.stl), siehe [PROJECT_STATUS.md §8](PROJECT_STATUS.md#8-was-noch-zu-tun-bzw-zu-prüfen-ist), Punkt 4 |
@@ -47,6 +47,35 @@ Version [`truck_object_30k_watertight.stl`](results/truck/truck_object_30k_water
 > README ein.
 
 ## Evaluierung
+
+### CAD-Vergleich: 3D-gedruckter Drachen-Seitenhalter (Chamfer-Distanz)
+
+Echte Evaluierung gegen ein **externes CAD-Modell**, wie in der Aufgabenstellung gefordert: ein selbst gedruckter
+„Dragon Page Holder“ (MakerWorld, schwarze Platte + goldener Drache), **21 eigene Smartphone-Fotos** (innerhalb der
+geforderten 5–30), durch die Web-App rekonstruiert (COLMAP → Grounding DINO + SAM2 → splatfacto → Visual Hull).
+Vergleich gegen die Original-Druckdatei mit [`eval/chamfer_eval.py`](eval/chamfer_eval.py).
+
+![Original, Rekonstruktion und Abweichung](docs/images/dragon_eval.png)
+
+| Vergleich | Chamfer | Genauigkeit (Rek. → CAD) | Vollständigkeit (CAD → Rek.) | F-Score @1 / 2 / 5 mm |
+|---|---|---|---|---|
+| **Drache** (goldene Teile des CAD) | **1,71 mm** (2,4 % der Diagonale) | 1,72 mm (Median 1,24) | 1,71 mm (Median 1,09) | 0,44 / 0,69 / **0,95** |
+| ganzes Objekt inkl. Platte | 2,79 mm | 2,55 mm | 3,02 mm | 0,28 / 0,49 / 0,88 |
+
+**Was das heißt:** Die Form des Drachen (Kopf, Körper, eingerollter Schwanz) wird auf ~1–2 mm genau getroffen;
+95 % der Oberfläche liegen innerhalb von 5 mm. Größere Abweichungen an der Unterseite (Übergang zur Platte) und an
+feinen Details (Hörner, Stacheln, Schuppen) — die Visual Hull glättet Details und kann Vertiefungen nicht abbilden.
+
+**Einschränkungen, ehrlich benannt:**
+- Die Segmentierung hat mit dem Prompt „a black and gold dragon page holder“ nur den **goldenen Drachen** erfasst, nicht
+  die schwarze Platte (dunkel auf dunklem Boden). Deshalb ist der Hauptvergleich Drache ↔ Drache-Teile des CAD.
+- Der **Maßstab ist angepasst** (COLMAP kennt keine absolute Größe): Ausrichtung per Ähnlichkeitstransformation
+  (24 Startorientierungen aus den Hauptachsen + symmetrisches ICP mit Skalierung). Bewertet wird die **Form**,
+  nicht die absolute Größe. Selbsttest (CAD gegen zufällig gedrehte/skalierte Kopie von sich selbst): 0,14 mm.
+- Die gedruckte Version ist laut Nutzerin leicht anders skaliert und hat Beschriftungen — beides wird durch die
+  Skalierungsanpassung bzw. als kleine Restabweichung aufgefangen.
+
+### Selbstkonsistenz-Proxy (truck)
 
 Die Aufgabenstellung sieht optional (~10 % der Bewertung) einen Vergleich der
 rekonstruierten STL-Geometrie mit einem **externen CAD-Referenzmodell** (Chamfer-Distanz)
@@ -119,6 +148,8 @@ Umgebung, holt den Code aus diesem Repository und gibt einen öffentlichen Link 
 | [`notebooks/archive/pipeline_v1.ipynb`](notebooks/archive/pipeline_v1.ipynb) | Erste Notebook-Version (SAM v1), nur historisch |
 | [`results/truck/`](results/truck/) | truck-Ergebnis: [`truck_object_30k.stl`](results/truck/truck_object_30k.stl) (nicht watertight), [`truck_object_30k_watertight.stl`](results/truck/truck_object_30k_watertight.stl) (mit `pymeshfix` repariert, druckbar), `truck_positions.json` (Hilfsdaten für den 3D-Viewer) |
 | [`results/figurine/`](results/figurine/) | Figur aus eigenen Fotos: [`figurine_object_carved.stl`](results/figurine/figurine_object_carved.stl) (Gaussian-Carving + Poisson; Torso gut, Beine lückenhaft) |
+| [`results/dragon/`](results/dragon/) | Drachen-Halter aus 21 eigenen Fotos: [`dragon_object.stl`](results/dragon/dragon_object.stl) + Metriken des CAD-Vergleichs (`eval_*_metrics.json`) |
+| [`eval/`](eval/) | [`chamfer_eval.py`](eval/chamfer_eval.py): Ausrichtung (Ähnlichkeitstransformation + symmetrisches ICP) und Chamfer/F-Score gegen eine CAD-Referenz |
 | [`results/abo_chair/`](results/abo_chair/) | ABO-Sessel (dense / N=30) — **geometrisch unbrauchbar**, siehe [PROJECT_STATUS.md §8](PROJECT_STATUS.md#8-was-noch-zu-tun-bzw-zu-prüfen-ist) |
 | [`docs/images/`](docs/images/) | Renderings für dieses README |
 | [`paper/`](paper/) | Wissenschaftliche Ausarbeitung (IEEE-Template) |

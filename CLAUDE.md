@@ -24,7 +24,8 @@ segmentation with Grounding DINO + SAM2, export to STL; optional evaluation agai
 | `notebooks/photos_to_stl.ipynb` | Same pipeline as a clean step-by-step notebook |
 | `notebooks/web_app.ipynb` | Colab notebook that starts the web app |
 | `pipeline_clean.ipynb` | Full experiment log (truck dataset, sparse-view tests, Chamfer, ABO, figurine) |
-| `results/` | STL results (truck, figurine, ABO chair) |
+| `results/` | STL results (truck, figurine, dragon, ABO chair) |
+| `eval/chamfer_eval.py` | Align reconstruction to a CAD STL (similarity + symmetric ICP) and report Chamfer / F-score |
 | `PROJECT_STATUS.md` | Detailed status, numbers, known problems, open items |
 | `paper/` | Scientific paper (IEEE template), only progress report 1 written so far |
 
@@ -63,7 +64,8 @@ special line; greeting in the browser console. Use `♉︎` (U+2649 + U+FE0E) so
 
 ## Open items
 
-- Real CAD evaluation: Chamfer distance of the figurine STL vs. its original print STL (owner has it).
+- CAD evaluation is done on the printed dragon page holder (`eval/chamfer_eval.py`, Chamfer 1.71 mm); the
+  reference STL is third-party (MakerWorld) and stays out of git. Black parts on dark floors get lost by the masks.
 - Scale the figurine STL to millimetres once the real height is known.
 - Run the web app end-to-end once on Colab (built and UI-tested locally, not yet with a real job).
 - Paper: write sections II–IV, add figures and the own-photo / visual-hull results, fit to 3 pages.

@@ -444,7 +444,15 @@ nichts davon öffnen.
    Posen-Verfeinerung während des Trainings (Gradientenabstieg korrigiert die groben
    Start-Schätzwerte selbst), statt Radius/Höhe/FOV von Hand weiter zu raten. Noch nicht
    getestet (Colab-GPU-Kontingent am 2026-10-02 erschöpft).
-2. **Echte CAD-Evaluierung.** ⚠️ **Zahlen liegen vor, aber mit Vorbehalt.** Dasselbe
+2. **Echte CAD-Evaluierung.** ✅ **Erledigt (2026-10-29) mit eigenem Druckobjekt.** Dragon Page Holder
+   (MakerWorld, schwarze Platte + goldener Drache), 21 eigene Fotos (36 Dateien, 15 Duplikate), Web-App auf Colab.
+   Segmentierung erfasste nur den goldenen Drachen → Vergleich mit den Drache-Teilen des CAD (Komponenten 0,1,3,4):
+   **Chamfer 1,71 mm** (2,4 % der Diagonale), F-Score 0,44 / 0,69 / 0,95 bei 1 / 2 / 5 mm; ganzes Objekt 2,79 mm.
+   Ausrichtung: Ähnlichkeitstransformation, 24 PCA-Starts + **symmetrisches** ICP mit Skalierung (einseitiges ICP
+   ließ den Maßstab kollabieren: Rekonstruktion schrumpfte auf ein Teilstück, Chamfer scheinbar 0,4 mm / 14 mm).
+   Selbsttest 0,14 mm. Skript `eval/chamfer_eval.py`, Bild `docs/images/dragon_eval.png`.
+
+   *Älterer Versuch (ABO-Sessel), ⚠️ nicht aussagekräftig:* Dasselbe
    ABO-Objekt hat ein echtes CAD-Modell (glTF/glb, `3dmodels/original/2/B07F2X8K62.glb`).
    Abschnitt 9b berechnet Chamfer-Distanz (Normierung, Rotationssuche, ICP) gegen diese
    **externe** Referenz: dense 0,2236 (ICP-RMSE 0,0273), N=30 0,2355 (0,0279), N=20 0,2132
