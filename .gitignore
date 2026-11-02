@@ -1,0 +1,24 @@
+pictures/
+figurine_raw/
+figurine_raw.zip
+__pycache__/
+dragon_picture/
+dragon_upload/
+# reference CAD files from MakerWorld (third-party licence) and evaluation by-products
+obj_1_Dragon Page Holder.stl
+InfinityCubeFidget.stl
+object_dragon_made.stl
+results/**/*_reference.stl
+results/**/*_aligned.stl
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+new_dragon/
+new_dragon_upload/
+dragon_v3/
+dragon_v3.zip
+dragon_v2_object*.stl
+dragon_v4/
+dragon_v4_small*.zip

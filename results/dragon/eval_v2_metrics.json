@@ -1,0 +1,20 @@
+{
+  "chamfer_mm": 2.475112569090795,
+  "accuracy_mean_mm": 2.5309567504765393,
+  "accuracy_median_mm": 1.7132796921852833,
+  "completeness_mean_mm": 2.419268387705051,
+  "completeness_median_mm": 1.2556728546442737,
+  "reference_diagonal_mm": 92.19320298079997,
+  "chamfer_pct_of_diagonal": 2.684701788272026,
+  "fscore_1mm": 0.37091429244519053,
+  "fscore_2mm": 0.6028897964792701,
+  "fscore_5mm": 0.86151700388804,
+  "icp_trimmed_rms_mm": 2.237017540818917,
+  "fitted_scale": 40.664469499292274,
+  "reference_parts": null,
+  "reference_extents_mm": [
+    78.47,
+    44.71,
+    18.54
+  ]
+}

@@ -1,0 +1,99 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{From a Few Phone Photos to a Printable Mesh:\\Language-Guided 3D Gaussian Splatting under Sparse Views}
+
+\author{\IEEEauthorblockN{Viktoriia Ovdiienko}
+\IEEEauthorblockA{FH Technikum Wien}
+}
+
+\maketitle
+
+\begin{abstract}
+Turning a handful of ordinary photos into a printable 3D mesh of a single object is a reasonable thing for a casual user to want, but 3D Gaussian Splatting (3DGS) pipelines are built and tested on dense captures. The pipeline described here estimates camera poses with COLMAP, uses Grounding DINO and SAM2 to keep only the object named by a short text prompt, trains a masked 3DGS scene and exports a watertight STL. Three measurements are reported: how quality degrades as the view count drops from 251 to 12 on a benchmark capture; what changes on real phone photos, where masking alone turned out not to remove the background from the Gaussian scene; and a comparison against an external CAD model, in which a 3D-printed object photographed 21 times is reconstructed with a Chamfer distance of 1.01\,mm (1.1\,\% of its size) to the original print file, after two additions to the mesh exporter: cutting at the supporting floor plane and carving free space with depth rendered from the trained 3DGS scene.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+3DGS \cite{kerbl20233dgs} has largely replaced Neural Radiance Fields \cite{mildenhall2020nerf} for fast novel-view synthesis from posed photographs. Because it represents a scene explicitly as anisotropic Gaussians, that representation can be filtered and turned into a triangle mesh -- which makes 3DGS a candidate for a use case it was not built for: photographing a physical object with a phone and getting an STL file for 3D printing.
+
+Two things stand in the way. 3DGS reconstructs everything visible, background included, so the object has to be isolated. And 3DGS is developed on tens to hundreds of views, while someone photographing one object will take five to thirty. This paper combines COLMAP \cite{schoenberger2016sfm}, text-prompted Grounding DINO \cite{liu2023groundingdino} + SAM2 \cite{ravi2024sam2} masks and nerfstudio's \emph{splatfacto} \cite{tancik2023nerfstudio} into one pipeline. The pipeline is assembled from standard parts; the contribution is empirical: (i) a controlled view-count study, (ii) what breaks when the pipeline meets real phone photos and how it was fixed, and (iii) an evaluation against the CAD file of a printed object.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{State of the Art}
+
+Structure-from-Motion with COLMAP \cite{schoenberger2016sfm} recovers camera poses from unordered photo sets and is the usual front end of both NeRF \cite{mildenhall2020nerf} and 3DGS \cite{kerbl20233dgs}. 3DGS optimizes an explicit set of Gaussians against a photometric loss; nerfstudio \cite{tancik2023nerfstudio} provides the implementation used here. Meshing a Gaussian cloud is commonly done with Poisson surface reconstruction \cite{kazhdan2006poisson} on the Gaussian centers after outlier and cluster filtering. On the segmentation side, Grounding DINO \cite{liu2023groundingdino} turns a text prompt into a bounding box and Segment Anything \cite{kirillov2023sam} or SAM2 \cite{ravi2024sam2} turns the box into a pixel mask; applying such masks to the photometric loss is the standard way to keep background pixels from producing gradients. Silhouette-based shape recovery (the visual hull) is far older than radiance fields and needs nothing but masks and calibrated cameras. Sparse-view behaviour is well studied for NeRF, much less for 3DGS, and rarely together with language-guided masking and mesh export; quantitative evaluations mostly use benchmark scenes such as Tanks and Temples \cite{knapitsch2017tanks} rather than a user's own capture compared with a CAD model.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Materials and Methods}
+
+\subsection{Pipeline}
+The input is $N$ photos of one object and a short description (``a figurine''). Photos are rotated by their EXIF flag, turned to portrait if needed (COLMAP is run with one shared camera model), de-duplicated and downscaled to 1600\,px. Poses come from COLMAP with exhaustive matching. For every registered image, Grounding DINO proposes boxes for the prompt and SAM2 converts them into a binary mask. \emph{splatfacto} is trained for 7000 iterations with the masks applied to the loss.
+
+Meshing was the step that had to change. The original exporter took the Gaussian centers, removed statistical outliers, kept the largest DBSCAN cluster and ran Poisson reconstruction at a fixed octree depth -- enough for the benchmark truck, not for real photos (Section~\ref{sec:real}). The final exporter works in a $288^3$ voxel grid on the GPU. Gaussians whose centers project inside the mask in at least 90\,\% of the views that see them define the object's bounding box. (1)~Silhouettes: a voxel is kept if it projects inside the mask in at least 95\,\% of the views that see it. (2)~Floor: no camera sees the underside of an object lying on a surface, so the supporting plane is fitted by RANSAC to background Gaussians (outside the masks) near the object, oriented towards the cameras, and everything below it is removed. (3)~Depth: each training view is rendered from the trained 3DGS scene; a voxel is declared free if at least 80\,\% of the views with reliable depth at its projection (accumulation $>0.5$, inside the mask) see the surface more than six voxels behind it. A simple ``any two views'' rule shredded textureless parts, whose rendered depth is noisy. Morphological opening, largest-component selection and hole filling follow; the occupancy is blurred slightly and meshed with marching cubes, giving a watertight STL. Cameras, Gaussians and voxels come from the same loaded nerfstudio pipeline, so they share one coordinate frame. The pipeline is also packaged as a Gradio web application that runs on a Colab T4 GPU.
+
+\subsection{Experiments and evaluation}
+\emph{View-count study:} the Tanks and Temples truck \cite{knapitsch2017tanks} (251 views) with $N\in\{12,24,251\}$ views drawn from its accurate pose set, each trained with and without masks; separately, COLMAP run from scratch on random 20- and 30-image subsets. \emph{Real photos:} a 3D-printed figurine, 43 phone photos taken while walking around it at three heights on a speckled floor. \emph{CAD evaluation:} a printed dragon page holder (black plate, gold dragon), 21 unique phone photos, reconstructed through the web application and compared with the original print file. Because COLMAP has no metric scale, the reconstruction is aligned with a similarity transform: 24 starts from matched principal axes, each refined by trimmed ICP with scale (Umeyama). Starts also include 48 random rotations; matches are taken in both directions; with one-way matches the fitted scale collapsed and the reconstruction shrank onto a part of the reference. On 60\,000 surface samples per mesh we report accuracy (reconstruction$\rightarrow$CAD), completeness (CAD$\rightarrow$reconstruction), their mean as Chamfer distance, and the F-score at 1, 2 and 5\,mm. Aligning the CAD model to a randomly rotated and scaled copy of itself gives 0.14\,mm, the sampling floor of the procedure.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experimental Results}
+
+\subsection{View count and masking (truck)}
+Without masks, $N=12$ fuses the object with the ground (bounding box $1.70\times1.61\times0.61$ against $1.06\times0.43\times0.33$ for the dense reference). With masks, $N=12$ is rough but truck-shaped ($1.22\times0.51\times0.40$) and $N=24$ is clearly closer ($1.16\times0.50\times0.39$). Masking is therefore a precondition for sparse views, not a refinement. COLMAP run from scratch registered 15/20 and 22/30 images of random subsets; more photos did not help, which points to the large baseline jumps of a random subsample rather than the count. Against the dense result, the $N=30$ reconstruction reaches a normalized Chamfer distance of 0.25 at an ICP inlier RMSE of 0.026: the core shape agrees, a noticeable share of the sparse geometry does not.
+
+\subsection{Real phone photos (figurine)}\label{sec:real}
+On a deliberate walk-around capture COLMAP registered all 43 images and Grounding DINO + SAM2 found the figurine in all 43. Training gave 125\,573 Gaussians, but the DBSCAN/Poisson mesh showed the figurine inside a cloud of floaters with a bounding box almost four times too large. The masks only stop background Gaussians from being \emph{trained}; Gaussians initialized from the room-wide COLMAP point cloud stay in the scene, and here they were connected to the object. Mask-projection filtering left 31\,038 Gaussians and a clean torso, but the black, often shadowed legs had too few Gaussians and broke apart (Fig.~\ref{fig:figurine}). Silhouette-based voxel carving recovered the legs and produced a watertight mesh (446\,638 triangles).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/figurine.jpg}
+\caption{Figurine: one of 43 input photos (left) and the mesh from mask-filtered Gaussian centers with Poisson reconstruction (right). Thin dark parts receive few Gaussians and break apart; the silhouette-based exporter closes them.}
+\label{fig:figurine}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/dragon_eval.jpg}
+\caption{CAD evaluation. From left: input photo (1 of 21), original print file, reconstruction after alignment (silhouettes, floor plane, 3DGS depth), reconstruction coloured by distance to the CAD surface (0--5\,mm).}
+\label{fig:dragon}
+\end{figure*}
+
+\subsection{Comparison with the CAD model (dragon)}
+The first run used the prompt ``a black and gold dragon page holder''; Grounding DINO returned one box around the gold dragon and the black plate was lost. With the two-phrase prompt ``a gold dragon. a black plate'' both parts are boxed and their SAM2 masks are merged. Table~\ref{tab:cad} compares the stages of the exporter against the whole print file ($78\times45\times19$\,mm). Silhouettes alone leave the reconstruction two to three times too thick, because nothing is observed below the object; rendered depth alone does not help there either. Cutting at the floor plane removes that volume and, together with depth carving, reduces the Chamfer distance from 2.79\,mm to 1.01\,mm (1.1\,\% of the diagonal; median accuracy 0.62\,mm, median completeness 0.49\,mm); 99\,\% of the surface lies within 5\,mm (Fig.~\ref{fig:dragon}). Plate, thumb hole, thickness and the dragon's head, body and curled tail are reproduced. The largest deviations are dents in the smooth black plate, where the rendered depth of the textureless surface is noisy, and the horns and scales. The depth-carving parameters were selected on this object from four variants and still have to be confirmed on others.
+
+\begin{table}[t]
+\centering
+\caption{Reconstruction from 21 photos vs.\ the original print file, whole object (mm).}
+\label{tab:cad}
+\begin{tabular}{lcccc}
+\toprule
+Exporter & Chamfer & F@1 & F@2 & F@5 \\
+\midrule
+Silhouettes, dragon mask only & 2.79 & 0.28 & 0.49 & 0.88 \\
++ full mask, 3DGS depth & 2.24 & 0.37 & 0.60 & 0.89 \\
++ floor plane & \textbf{1.01} & \textbf{0.69} & \textbf{0.84} & \textbf{0.99} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Summary and Outlook}
+
+A text prompt and 21--43 phone photos are enough to obtain a watertight STL that agrees with the CAD model to about 1\,mm on an 8\,cm object, provided the photos are taken by walking around the object on a textured surface and every part of the object is named in the prompt. Masking is necessary in the sparse regime, but not sufficient: background Gaussians from the COLMAP initialization survive masked training, and Gaussian centers alone under-sample thin and dark parts. Combining three cues in one voxel grid worked: silhouettes bound the object, the floor plane bounds the unobserved underside, and depth rendered from the trained 3DGS scene removes the remaining free space. The scale of the result is not metric, textureless surfaces still get dented, and concavities that are hidden from every view cannot be recovered. Next steps: confirm the carving parameters on more objects and view counts, weight depth by local texture, add a reference length for metric scale, and repeat the view-count study on real captures.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{\small
+\bibliographystyle{IEEEtranS}
+\bibliography{refs}
+}
+
+\end{document}
